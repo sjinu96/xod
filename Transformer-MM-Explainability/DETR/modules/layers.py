@@ -761,7 +761,7 @@ class MultiheadAttention(RelProp):
         # attn_output = torch.bmm(attn_output_weights, v)
         attn_output = self.einsum2([attn_output_weights, v])  # BHxTxD
 
-        #  BHxTxD -> TxBHxD -> TxBxHD
+        #  BHxTxD -> TxBHxD -> TxBxHD (Target length , Batch size , embed_dim(num of heads x dim of head)
         attn_output = attn_output.transpose(0, 1).contiguous().view(tgt_len, bsz, embed_dim)
         attn_output = self.out_proj(attn_output)
 
