@@ -74,10 +74,15 @@ class DETR(nn.Module):
         hs, memory = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])
         print('# END DETR.transformer.forward. output : hs, memory. \nshape of hs and memory : ', hs.shape, memory.shape)
         self.memory_shape = memory.shape
-
+        print('# START DETR.class_embed(hs)')
         outputs_class = self.class_embed(hs)
+        print('# END DETR.class_embed(hs). output : outputs_class', outputs_class.shape)
+        print('# START DETR.index_select(outputs_class..)')
         a = self.index_select(outputs_class, 0, torch.tensor([5]).cuda()).squeeze(0)
+        print('# END DETR.index_select(outputs_class..).output : a(logits)', a.shape)
+        print('# START DETR.bbox_embed(hs).sigmoid()')
         outputs_coord = self.bbox_embed(hs).sigmoid()
+        print('# END DETR.bbox_embed(hs).sigmoid(). output : outputs_coord(bboxes)', outputs_coord.shape)
         out = {'pred_logits': a, 'pred_boxes': outputs_coord[-1]}
         if self.aux_loss:
             out['aux_outputs'] = self._set_aux_loss(outputs_class, outputs_coord)

@@ -61,7 +61,8 @@ class Transformer(nn.Module):
         pos_embed = pos_embed.flatten(2).permute(2, 0, 1)
         query_embed = query_embed.unsqueeze(1).repeat(1, bs, 1)
         mask = mask.flatten(1)
-
+        
+   
         tgt = torch.zeros_like(query_embed)
         print('Start Transformer.forward.encoder')
         print('Input : src, mask, pos_embed')
@@ -180,7 +181,7 @@ class TransformerDecoder(nn.Module):
                 pos: Optional[Tensor] = None,
                 query_pos: Optional[Tensor] = None):
         output = tgt
-
+        print('In Transformer.decoder.forward(tgt, memory...). shape of output(tgt) :', output.shape)
         intermediate = []
 
         mem_list = self.clone(memory, len(self.layers))
@@ -205,12 +206,12 @@ class TransformerDecoder(nn.Module):
             # if self.return_intermediate:
             #     intermediate.pop()
             #     intermediate.append(output)
-
+        
         if self.return_intermediate:
             return torch.stack(intermediate)
-
+        print('End Transformer.decoder.forward(tgt, memory...). shape of output :', output.shape)
         return output.unsqueeze(0)
-
+        
     def relprop(self, cam_list, alpha, **kwargs):
         # FIXME
         if self.return_intermediate:
@@ -437,6 +438,7 @@ class TransformerDecoderLayer(nn.Module):
         mem_1, mem_2 = self.clone4(memory, 2)
         q = self.wembd2(tgt_1, query_pos)
         k = self.wembd3(mem_1, pos)
+        print('Transformer.decoder.forward(_post). k and value : k, mem_2', k.shape, mem_2.shape)
         tgt2 = self.multihead_attn(query=q,
                                    key=k,
                                    value=mem_2,
