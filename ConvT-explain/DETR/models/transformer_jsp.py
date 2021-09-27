@@ -6,7 +6,14 @@ Copy-paste from torch.nn.Transformer with modifications:
     * positional encodings are passed in MHattention
     * extra LN at the end of encoder is removed
     * decoder returns a stack of activations from all decoding layers
+
+app of jsp
+
+2021-09-27 : add off_decoder_head
+
 """
+
+
 import copy
 from typing import Optional, List
 
@@ -22,16 +29,16 @@ class Transformer(nn.Module):
     def __init__(self, d_model=512, nhead=8, num_encoder_layers=6,
                  num_decoder_layers=6, dim_feedforward=2048, dropout=0.1,
                  activation="relu", normalize_before=False,
-                 return_intermediate_dec=False):
+                 return_intermediate_dec=False, off_decoder_head=False):
         super().__init__()
 
         encoder_layer = TransformerEncoderLayer(d_model, nhead, dim_feedforward,
                                                 dropout, activation, normalize_before)
         encoder_norm = LayerNorm(d_model) if normalize_before else None
         self.encoder = TransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm)
-
+    
         decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward,
-                                                dropout, activation, normalize_before)
+                                                dropout, activation, normalize_before, off_decoder_head=off_decoder_head)#추가-0927 : add decoder head
         decoder_norm = LayerNorm(d_model)
         self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm,
                                           return_intermediate=return_intermediate_dec)
@@ -40,8 +47,11 @@ class Transformer(nn.Module):
 
         self.d_model = d_model
         self.nhead = nhead
-
+        
+       
         self.clone = Clone()
+        
+        
 
     def _reset_parameters(self):
         for p in self.parameters():
@@ -173,7 +183,6 @@ class TransformerDecoder(nn.Module):
         self.norm = norm
         self.return_intermediate = return_intermediate
         self.clone = Clone()
-
     def forward(self, tgt, memory,
                 tgt_mask: Optional[Tensor] = None,
                 memory_mask: Optional[Tensor] = None,
@@ -193,7 +202,6 @@ class TransformerDecoder(nn.Module):
                            tgt_key_padding_mask=tgt_key_padding_mask,
                            memory_key_padding_mask=memory_key_padding_mask,
                            pos=pos, query_pos=query_pos)
-            print('shape of output in decoder : ', output.shape)
             if self.return_intermediate:
                 if i == self.num_layers - 1:
                     intermediate.append(self.norm(output))
@@ -388,10 +396,10 @@ class TransformerEncoderLayer(nn.Module):
 class TransformerDecoderLayer(nn.Module):
 
     def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1,
-                 activation="relu", normalize_before=False):
+                 activation="relu", normalize_before=False, off_decoder_head=False): #추가:0927-off_decoder_head : Off.
         super().__init__()
         self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout)
-        self.multihead_attn = MultiheadAttention(d_model, nhead, dropout=dropout)
+        self.multihead_attn = MultiheadAttention(d_model, nhead, dropout=dropout, no_weight = off_decoder_head)#추가:0927-off_decoder_head : Off.
         # Implementation of Feedforward model
         self.linear1 = Linear(d_model, dim_feedforward)
         self.dropout = Dropout(dropout)
@@ -576,7 +584,7 @@ def _get_clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 
 
-def build_transformer(args):
+def build_transformer_jsp(args):
     return Transformer(
         d_model=args.hidden_dim,
         dropout=args.dropout,
@@ -586,6 +594,7 @@ def build_transformer(args):
         num_decoder_layers=args.dec_layers,
         normalize_before=args.pre_norm,
         return_intermediate_dec=True,
+        off_decoder_head= args.off_decoder_head #수정(1) : Out heads(input : [layers x heads ] matrix) 
     )
 
 

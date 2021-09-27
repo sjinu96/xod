@@ -63,7 +63,8 @@ class BackboneBase(nn.Module):
             if not train_backbone or 'layer2' not in name and 'layer3' not in name and 'layer4' not in name:
                 parameter.requires_grad_(False)
         if return_interm_layers:
-            return_layers = {"layer1": "0", "layer2": "1", "layer3": "2", "layer4": "3"}
+            return_layers = {"layer1": "0", "layer2": "1", "layer3": "2", "layer4": "3"} # 수정(1)
+#             return_layers = {"layer1": "0", "layer2": "1", "layer3": "2"} # 수정(1)
         else:
             return_layers = {'layer4': "0"}
         self.body = IntermediateLayerGetter(backbone, return_layers=return_layers)
@@ -89,7 +90,8 @@ class Backbone(BackboneBase):
         backbone = getattr(torchvision.models, name)(
             replace_stride_with_dilation=[False, False, dilation],
             pretrained=is_main_process(), norm_layer=FrozenBatchNorm2d)
-        num_channels = 512 if name in ('resnet18', 'resnet34') else 2048
+        num_channels = 512 if name in ('resnet18', 'resnet34') else 2048 # 수정(2)
+#         num_channels = 512 if name in ('resnet18', 'resnet34') else 1024 # 수정(2)
         super().__init__(backbone, train_backbone, num_channels, return_interm_layers)
 
 

@@ -692,7 +692,7 @@ class Conv2d(nn.Conv2d, RelProp):
 
 
 class MultiheadAttention(RelProp):
-    def __init__(self, embed_dim, num_heads, dropout=0.):
+    def __init__(self, embed_dim, num_heads, dropout=0., no_weight:'[num_heads] idx vector'=False): #수정-0927:Deocder attention off
         super(MultiheadAttention, self).__init__()
         self.embed_dim = embed_dim
         self.kdim = embed_dim
@@ -717,6 +717,7 @@ class MultiheadAttention(RelProp):
         self.attn_cam = None
         self.attn = None
         self.attn_gradients = None
+        self.no_weight = no_weight #수정-0927:Deocder attention off
 
     def save_attn_cam(self, cam):
         self.attn_cam = cam
@@ -782,7 +783,14 @@ class MultiheadAttention(RelProp):
 
         attn_output_weights = self.softmax(attn_output_weights)
         attn_output_weights = self.dropout(attn_output_weights)
-
+        
+        
+        # 추가-0927:Deocder attention off
+        if self.no_weight: # self.no_weight : length : multiheads. ex) [0,1,0,1,1,0,0,0] --> 2,4,5th head off
+            mask = torch.stack([torch.zeros_like(attn_output_weights[0]) if (idx==1) 
+                                                                 else torch.ones_like(attn_output_weights[0]) for idx in self.no_weight])
+            attn_output_weights=attn_output_weights * mask
+     
         self.save_attn(attn_output_weights)
         attn_output_weights.register_hook(self.save_attn_gradients)
 

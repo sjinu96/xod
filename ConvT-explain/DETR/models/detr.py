@@ -1,6 +1,9 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 """
 DETR model and criterion classes.
+
+# 0927 : add decoder off
+
 """
 import torch
 import torch.nn.functional as F
@@ -16,6 +19,7 @@ from DETR.models.matcher import build_matcher
 from DETR.models.segmentation import (DETRsegm, PostProcessPanoptic, PostProcessSegm,
                                dice_loss, sigmoid_focal_loss)
 from DETR.models.transformer import build_transformer
+from DETR.models.transformer_jsp import build_transformer_jsp #추가-0927: add off decoder
 from DETR.modules.layers import *
 
 
@@ -53,7 +57,7 @@ class DETR(nn.Module):
                                 Shape= [batch_size x num_queries x (num_classes + 1)]
                - "pred_boxes": The normalized boxes coordinates for all queries, represented as
                                (center_x, center_y, height, width). These values are normalized in [0, 1],
-                               relative to the size of each individual image (disregarding possible padding).
+                               relative to sthe size of each individual image (disregarding possible padding).
                                See PostProcess for information on how to retrieve the unnormalized bounding box.
                - "aux_outputs": Optional, only returned when auxilary losses are activated. It is a list of
                                 dictionnaries containing the two above keys for each decoder layer.
@@ -373,7 +377,14 @@ def build(args):
 
     backbone = build_backbone(args)
 
-    transformer = build_transformer(args)
+    
+    #추가-0927 : add decoder off
+    
+    if args.off_decoder_head: #추가-0927 : add decoder off
+        transformer = build_transformer_jsp(args) #추가-0927 : add decoder off
+    else : 
+        transformer = build_transformer(args)
+    
 
     model = DETR(
         backbone,

@@ -139,60 +139,151 @@ class Generator:
                                                apply_normalization=self.normalize_self_attention,
                                                apply_self_in_rule_10=self.apply_self_in_rule_10)
 
-    def generate_ours(self, img, target_index, index=None, use_lrp=True, normalize_self_attention=True, apply_self_in_rule_10=True):
+#     def generate_ours(self, img, target_index, index=None, use_lrp=True, normalize_self_attention=True, apply_self_in_rule_10=True):
+#         self.use_lrp = use_lrp
+#         self.normalize_self_attention = normalize_self_attention
+#         self.apply_self_in_rule_10 = apply_self_in_rule_10
+#         outputs = self.model(img)
+#         outputs = outputs['pred_logits']
+#         kwargs = {"alpha": 1,
+#                   "target_index": target_index}
+
+#         if index == None:
+#             index = outputs[0, target_index, :-1].max(1)[1]
+
+#         kwargs["target_class"] = index
+
+#         one_hot = torch.zeros_like(outputs).to(outputs.device)
+#         one_hot[0, target_index, index] = 1
+#         one_hot_vector = one_hot
+#         one_hot.requires_grad_(True)
+#         one_hot = torch.sum(one_hot.cuda() * outputs)
+
+#         self.model.zero_grad()
+#         one_hot.backward(retain_graph=True)
+
+#         if use_lrp:
+#             self.model.relprop(one_hot_vector, **kwargs)
+
+#         decoder_blocks = self.model.transformer.decoder.layers
+#         encoder_blocks = self.model.transformer.encoder.layers
+
+#         # initialize relevancy matrices
+#         image_bboxes = encoder_blocks[0].self_attn.get_attn().shape[-1]
+#         queries_num = decoder_blocks[0].self_attn.get_attn().shape[-1]
+
+#         # image self attention matrix
+#         self.R_i_i = torch.eye(image_bboxes, image_bboxes).to(encoder_blocks[0].self_attn.get_attn().device)
+#         # queries self attention matrix
+#         self.R_q_q = torch.eye(queries_num, queries_num).to(encoder_blocks[0].self_attn.get_attn().device)
+#         # impact of image boxes on queries
+#         self.R_q_i = torch.zeros(queries_num, image_bboxes).to(encoder_blocks[0].self_attn.get_attn().device)
+
+#         # image self attention in the encoder
+#         self.handle_self_attention_image(encoder_blocks)
+
+#         # decoder self attention of queries followd by multi-modal attention
+#         for blk in decoder_blocks:
+#             # decoder self attention
+#             self.handle_co_attn_self_query(blk)
+
+#             # encoder decoder attention
+#             self.handle_co_attn_query(blk)
+#         aggregated = self.R_q_i.unsqueeze_(0)
+
+#         aggregated = aggregated[:,target_index, :].unsqueeze_(0).detach()
+#         return aggregated
+    def generate_ours(self, img, target_index, index=None, use_lrp=True,
+                     normalize_self_attention=True, apply_self_in_rule_10=True, use_all_layers=False):
+        
+
         self.use_lrp = use_lrp
         self.normalize_self_attention = normalize_self_attention
         self.apply_self_in_rule_10 = apply_self_in_rule_10
+        self.use_all_layers = use_all_layers
+
         outputs = self.model(img)
         outputs = outputs['pred_logits']
-        kwargs = {"alpha": 1,
-                  "target_index": target_index}
+        
 
+        kwargs = {"alpha": 1, 
+                 "target_index": target_index}
+        
         if index == None:
             index = outputs[0, target_index, :-1].max(1)[1]
 
         kwargs["target_class"] = index
-
+        
         one_hot = torch.zeros_like(outputs).to(outputs.device)
-        one_hot[0, target_index, index] = 1
-        one_hot_vector = one_hot
-        one_hot.requires_grad_(True)
+        one_hot[0, target_index, index] = 1 # [1, 100, 92] 차원으로 된 원핫벡터
+        one_hot_vector = one_hot # 나중에 타당성 전파하기 위함
+
+        one_hot.requires_grad_(True) # 그래디언트 추적 # 복사 후 원본은 다시 autograd가 추적해야 한다.
         one_hot = torch.sum(one_hot.cuda() * outputs)
+        
+       
+        
+        self.model.zero_grad() # 모델 내 그래디언트를 0으로 초기화
 
-        self.model.zero_grad()
-        one_hot.backward(retain_graph=True)
-
+        one_hot.backward(retain_graph=True) # backward를 하는 동안에 중간 가중치들은 보존한다.
+        
+        
         if use_lrp:
+            return 
+
             self.model.relprop(one_hot_vector, **kwargs)
 
         decoder_blocks = self.model.transformer.decoder.layers
         encoder_blocks = self.model.transformer.encoder.layers
 
-        # initialize relevancy matrices
-        image_bboxes = encoder_blocks[0].self_attn.get_attn().shape[-1]
-        queries_num = decoder_blocks[0].self_attn.get_attn().shape[-1]
-
-        # image self attention matrix
+        # 픽셀 개수
+        image_bboxes = encoder_blocks[0].self_attn.get_attn().shape[-1] # wh in (8, wh, wh)
+        # object 개수
+        queries_num = decoder_blocks[0].self_attn.get_attn().shape[-1] # 100 in (8,100,100)
+        # 타당성 행렬(Relevancy matrices) 초기화
+        # 또한, 계산 자체가 attention weights랑 행해지기 때문에 device 맞춰주기
+        # image self attention matrix - (wh x wh) 크기의 Identity 행렬
         self.R_i_i = torch.eye(image_bboxes, image_bboxes).to(encoder_blocks[0].self_attn.get_attn().device)
+        
         # queries self attention matrix
         self.R_q_q = torch.eye(queries_num, queries_num).to(encoder_blocks[0].self_attn.get_attn().device)
-        # impact of image boxes on queries
+        # image --> queries의 영향 ( (100 x wh) 크기 행렬)
         self.R_q_i = torch.zeros(queries_num, image_bboxes).to(encoder_blocks[0].self_attn.get_attn().device)
+        
+        if self.use_all_layers == True:
+            self.R_i_i_all = []
+            self.R_q_q_all = []
+            self.R_q_i_all = []
+        
+         # encoder 내에서 image에 대한 self-attention
 
-        # image self attention in the encoder
         self.handle_self_attention_image(encoder_blocks)
+    
+        # decoder 내에서 queries에 대한 self-attention + Multi-modal attention
 
-        # decoder self attention of queries followd by multi-modal attention
-        for blk in decoder_blocks:
+        for idx, blk in enumerate(decoder_blocks):
             # decoder self attention
             self.handle_co_attn_self_query(blk)
 
             # encoder decoder attention
             self.handle_co_attn_query(blk)
-        aggregated = self.R_q_i.unsqueeze_(0)
+      
+        
+        if not self.use_all_layers:
+            aggregated = self.R_q_i.unsqueeze_(0)
+            aggregated = aggregated[:,target_index, :].unsqueeze_(0).detach()
+            # 결과적으로 위 타겟에 대한 [1, 1, 1, wh] 크기의 cam(if not use_all_layers)
+            # 굳이 이렇게 만드는 이유는 아마 [layer, target_index, ...] 를 위해?            
+        else:
+            # [6, 1, 100, wh]
 
-        aggregated = aggregated[:,target_index, :].unsqueeze_(0).detach()
-        return aggregated
+            aggregated = torch.stack(self.R_q_i_all).unsqueeze_(1)
+            # [6, 1, 1, 1, wh]
+            aggregated = aggregated[:, :, target_index, :].unsqueeze_(1).detach()
+
+        
+        
+        return aggregated 
 
     def generate_partial_lrp(self, img, target_index, index=None):
         outputs = self.model(img)
