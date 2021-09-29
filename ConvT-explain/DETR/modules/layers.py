@@ -786,7 +786,7 @@ class MultiheadAttention(RelProp):
         
         
         # 추가-0927:Deocder attention off
-        if self.no_weight: # self.no_weight : length : multiheads. ex) [0,1,0,1,1,0,0,0] --> 2,4,5th head off
+        if self.no_weight: # self.no_weight : length : multiheads. ex) [0,1,0,1,1,0,0,0] --> 2,4,5th head off 
             mask = torch.stack([torch.zeros_like(attn_output_weights[0]) if (idx==1) 
                                                                  else torch.ones_like(attn_output_weights[0]) for idx in self.no_weight])
             attn_output_weights=attn_output_weights * mask

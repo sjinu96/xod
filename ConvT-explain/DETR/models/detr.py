@@ -63,30 +63,30 @@ class DETR(nn.Module):
                                 dictionnaries containing the two above keys for each decoder layer.
         """
         
-        print('## In DETR.forward(samples: NestedTensor222)')
+#         print('## In DETR.forward(samples: NestedTensor222)')
         if isinstance(samples, (list, torch.Tensor)):
             samples = nested_tensor_from_tensor_list(samples)
         features, pos = self.backbone(samples)
-        print('len and shape of features in self.backbone(samples) : ', len(features), features[0].tensors.shape)
+#         print('len and shape of features in self.backbone(samples) : ', len(features), features[0].tensors.shape)
         src, mask = features[-1].decompose()
-        print('src, mask = features[-1].decompose()')
-        print('shape of src : ', src.shape)
-        print('shape of mask : ', mask.shape)
+#         print('src, mask = features[-1].decompose()')
+#         print('shape of src : ', src.shape)
+#         print('shape of mask : ', mask.shape)
         self.spatial_dim = src.shape[-2:]
         assert mask is not None
-        print('# START DETR.transformer.forward(self.input_proj(src), mask, ...)')
+#         print('# START DETR.transformer.forward(self.input_proj(src), mask, ...)')
         hs, memory = self.transformer(self.input_proj(src), mask, self.query_embed.weight, pos[-1])
-        print('# END DETR.transformer.forward. output : hs, memory. \nshape of hs and memory : ', hs.shape, memory.shape)
+#         print('# END DETR.transformer.forward. output : hs, memory. \nshape of hs and memory : ', hs.shape, memory.shape)
         self.memory_shape = memory.shape
-        print('# START DETR.class_embed(hs)')
+#         print('# START DETR.class_embed(hs)')
         outputs_class = self.class_embed(hs)
-        print('# END DETR.class_embed(hs). output : outputs_class', outputs_class.shape)
-        print('# START DETR.index_select(outputs_class..)')
+#         print('# END DETR.class_embed(hs). output : outputs_class', outputs_class.shape)
+#         print('# START DETR.index_select(outputs_class..)')
         a = self.index_select(outputs_class, 0, torch.tensor([5]).cuda()).squeeze(0)
-        print('# END DETR.index_select(outputs_class..).output : a(logits)', a.shape)
-        print('# START DETR.bbox_embed(hs).sigmoid()')
+#         print('# END DETR.index_select(outputs_class..).output : a(logits)', a.shape)
+#         print('# START DETR.bbox_embed(hs).sigmoid()')
         outputs_coord = self.bbox_embed(hs).sigmoid()
-        print('# END DETR.bbox_embed(hs).sigmoid(). output : outputs_coord(bboxes)', outputs_coord.shape)
+#         print('# END DETR.bbox_embed(hs).sigmoid(). output : outputs_coord(bboxes)', outputs_coord.shape)
         out = {'pred_logits': a, 'pred_boxes': outputs_coord[-1]}
         if self.aux_loss:
             out['aux_outputs'] = self._set_aux_loss(outputs_class, outputs_coord)
